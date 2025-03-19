@@ -8,7 +8,8 @@ from PIL import Image
 # -----------------------------
 # 📥 GITHUB BASE URL
 # -----------------------------
-GITHUB_BASE_URL = "https://raw.githubusercontent.com/Dileep-kumarc/Brain-Tumor-Models/main/"
+GITHUB_BASE_URL = "GITHUB_BASE_URL = "https://raw.githubusercontent.com/Dileep-kumarc/Brain-Tumor-Models/main/"
+
 
 # -----------------------------
 # 📥 DOWNLOAD MODEL FUNCTION

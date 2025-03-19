@@ -22,7 +22,7 @@ def download_model_from_github(filename, expected_size_mb):
                 response = requests.get(url, stream=True)
                 if response.status_code == 404:
                     st.error(f"❌ File not found: {filename}. Please check if it's uploaded to GitHub.")
-                    return
+                    return False
                 
                 response.raise_for_status()
 
@@ -35,14 +35,17 @@ def download_model_from_github(filename, expected_size_mb):
                 if file_size < expected_size_mb * 0.8:
                     os.remove(filename)
                     st.error(f"❌ File size mismatch for {filename}. Expected ~{expected_size_mb}MB but got {file_size:.2f}MB.")
-                    return
+                    return False
 
                 st.success(f"✅ {filename} downloaded successfully ({file_size:.2f} MB)")
+                return True
 
             except Exception as e:
                 st.error(f"❌ Failed to download {filename}: {str(e)}")
                 if os.path.exists(filename):
                     os.remove(filename)
+                return False
+    return True
 
 # -----------------------------
 # 🎨 STREAMLIT UI SETUP
@@ -56,9 +59,11 @@ st.sidebar.header("⚡ Model Status")
 # 📥 DOWNLOAD MODEL
 # -----------------------------
 TUMOR_CLASSIFIER_MODEL_PATH = "best_mri_classifier.pth"
-download_model_from_github(TUMOR_CLASSIFIER_MODEL_PATH, 205)
 
-st.sidebar.success("✅ Model is ready!")
+if download_model_from_github(TUMOR_CLASSIFIER_MODEL_PATH, 205):
+    st.sidebar.success("✅ Model is ready!")
+else:
+    st.sidebar.error("❌ Model download failed. Please check the GitHub repository.")
 
 # -----------------------------
 # 🧠 LOAD MODEL

@@ -8,8 +8,7 @@ from PIL import Image
 # -----------------------------
 # 📥 GITHUB BASE URL
 # -----------------------------
-GITHUB_BASE_URL ="https://raw.githubusercontent.com/Dileep-kumarc/Brain-Tumor-Models/main/"
-
+GITHUB_BASE_URL = "https://raw.githubusercontent.com/Dileep-kumarc/Brain-Tumor-Models/main/"
 
 # -----------------------------
 # 📥 DOWNLOAD MODEL FUNCTION
@@ -21,6 +20,10 @@ def download_model_from_github(filename, expected_size_mb):
         with st.spinner(f"Downloading {filename}... ⏳"):
             try:
                 response = requests.get(url, stream=True)
+                if response.status_code == 404:
+                    st.error(f"❌ File not found: {filename}. Please check if it's uploaded to GitHub.")
+                    return
+                
                 response.raise_for_status()
 
                 with open(filename, "wb") as f:
@@ -31,8 +34,8 @@ def download_model_from_github(filename, expected_size_mb):
                 file_size = os.path.getsize(filename) / (1024 * 1024)  # Convert to MB
                 if file_size < expected_size_mb * 0.8:
                     os.remove(filename)
-                    st.error(f"File size mismatch for {filename}. Expected ~{expected_size_mb}MB but got {file_size:.2f}MB.")
-                    raise ValueError("Invalid file size")
+                    st.error(f"❌ File size mismatch for {filename}. Expected ~{expected_size_mb}MB but got {file_size:.2f}MB.")
+                    return
 
                 st.success(f"✅ {filename} downloaded successfully ({file_size:.2f} MB)")
 
@@ -40,7 +43,6 @@ def download_model_from_github(filename, expected_size_mb):
                 st.error(f"❌ Failed to download {filename}: {str(e)}")
                 if os.path.exists(filename):
                     os.remove(filename)
-                raise
 
 # -----------------------------
 # 🎨 STREAMLIT UI SETUP
@@ -51,27 +53,26 @@ st.title("🧠 Brain Tumor Detection")
 st.sidebar.header("⚡ Model Status")
 
 # -----------------------------
-# 📥 DOWNLOAD MODELS
+# 📥 DOWNLOAD MODEL
 # -----------------------------
-MRI_CHECKER_MODEL_PATH = "mri_checker.pth"
 TUMOR_CLASSIFIER_MODEL_PATH = "best_mri_classifier.pth"
-
-download_model_from_github(MRI_CHECKER_MODEL_PATH, 50)   # Replace 50 with actual size of mri_checker.pth
 download_model_from_github(TUMOR_CLASSIFIER_MODEL_PATH, 205)
 
-st.sidebar.success("✅ All models are ready!")
+st.sidebar.success("✅ Model is ready!")
 
 # -----------------------------
-# 🧠 LOAD MODELS
+# 🧠 LOAD MODEL
 # -----------------------------
 @st.cache_resource
 def load_model(model_path):
-    model = torch.load(model_path, map_location=torch.device('cpu'))  # Load on CPU
-    model.eval()  # Set to evaluation mode
+    if not os.path.exists(model_path):
+        st.error(f"❌ Model file {model_path} not found. Please check your download URL.")
+        return None
+    model = torch.load(model_path, map_location=torch.device('cpu'))
+    model.eval()
     return model
 
-# Load both models
-mri_checker = load_model(MRI_CHECKER_MODEL_PATH)
+# Load the tumor classification model
 tumor_classifier = load_model(TUMOR_CLASSIFIER_MODEL_PATH)
 
 # -----------------------------
@@ -95,29 +96,21 @@ uploaded_file = st.file_uploader("Upload an MRI Image (PNG, JPG)", type=["png", 
 if uploaded_file:
     image = Image.open(uploaded_file).convert("RGB")
     st.image(image, caption="Uploaded Image", use_column_width=True)
-    
-    # Step 1️⃣: Check if the uploaded image is an MRI scan
-    st.subheader("🧐 Checking if this is an MRI image...")
+
+    # Step 1️⃣: Classify the MRI tumor type
+    st.subheader("🔬 Classifying Tumor Type...")
     input_tensor = preprocess_image(image)
-    
-    with torch.no_grad():
-        is_mri_output = mri_checker(input_tensor)
-        is_mri = torch.argmax(is_mri_output, dim=1).item()
 
-    if is_mri == 0:  # Assuming 0 = Not MRI, 1 = MRI
-        st.error("🚫 This is **not** an MRI image. Please upload a valid brain MRI scan.")
-    else:
-        st.success("✅ MRI scan detected!")
-
-        # Step 2️⃣: Classify the MRI tumor type
-        st.subheader("🔬 Classifying Tumor Type...")
+    if tumor_classifier:
         with torch.no_grad():
             tumor_output = tumor_classifier(input_tensor)
             predicted_class = torch.argmax(tumor_output, dim=1).item()
-        
+
         # Mapping output to class names
         class_labels = ["No Tumor", "Glioma", "Meningioma", "Pituitary"]
         prediction_result = class_labels[predicted_class]
-        
+
         # Show the classification result
         st.success(f"🧠 **Prediction:** {prediction_result}")
+    else:
+        st.error("❌ Tumor classification model is not loaded.")

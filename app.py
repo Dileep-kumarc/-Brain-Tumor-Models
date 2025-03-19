@@ -1,57 +1,99 @@
 import os
 import requests
-import streamlit as st
 import torch
 import torchvision.transforms as transforms
+from PIL import Image
 import tensorflow as tf
 import numpy as np
-from PIL import Image
+import streamlit as st
 
 # -----------------------------
-# 📥 DIRECT GITHUB LINKS FOR MODELS
+# 📥 GITHUB MODEL URLS
 # -----------------------------
-MRI_CLASSIFIER_URL = "https://github.com/Dileep-kumarc/-Brain-Tumor-Models/raw/main/best_mri_classifier.pth"
-TUMOR_CLASSIFIER_URL = "https://github.com/Dileep-kumarc/-Brain-Tumor-Models/raw/main/brain_tumor_classifier.h5"
+GITHUB_BASE_URL = "https://raw.githubusercontent.com/Dileep-kumarc/-Brain-Tumor-Models/main/"
 
-MRI_MODEL_PATH = "best_mri_classifier.pth"
-TUMOR_MODEL_PATH = "brain_tumor_classifier.h5"
+MRI_MODEL_FILENAME = "best_mri_classifier.pth"
+TUMOR_MODEL_FILENAME = "brain_tumor_classifier.h5"
+
+MRI_MODEL_PATH = os.path.join(os.getcwd(), MRI_MODEL_FILENAME)
+TUMOR_MODEL_PATH = os.path.join(os.getcwd(), TUMOR_MODEL_FILENAME)
 
 # -----------------------------
-# 📥 DOWNLOAD FUNCTION
+# 📥 DOWNLOAD MODEL FUNCTION
 # -----------------------------
-def download_model(model_url, filename, expected_size_mb):
-    """Download a model file from GitHub if not present."""
-    if not os.path.exists(filename):
-        with st.spinner(f"Downloading {filename}... ⏳"):
-            try:
-                response = requests.get(model_url, stream=True)
-                response.raise_for_status()
+def download_model(filename, expected_size_mb):
+    """Download a model file from GitHub and verify integrity."""
+    url = GITHUB_BASE_URL + filename
+    local_path = os.path.join(os.getcwd(), filename)
 
-                with open(filename, "wb") as f:
-                    for chunk in response.iter_content(chunk_size=8192):
-                        f.write(chunk)
+    if os.path.exists(local_path):
+        # Verify file integrity
+        file_size = os.path.getsize(local_path) / (1024 * 1024)  # Convert to MB
+        if file_size >= expected_size_mb * 0.8:
+            st.sidebar.success(f"✅ {filename} is already downloaded.")
+            return
 
-                # Verify file size
-                file_size = os.path.getsize(filename) / (1024 * 1024)  # Convert to MB
-                if file_size < expected_size_mb * 0.8:
-                    os.remove(filename)
-                    st.error(f"❌ File size mismatch for {filename}. Expected ~{expected_size_mb}MB but got {file_size:.2f}MB.")
-                    return False
+        # If file is corrupt, remove and re-download
+        os.remove(local_path)
+        st.warning(f"⚠️ Corrupt file detected for {filename}. Re-downloading...")
 
-                st.success(f"✅ {filename} downloaded successfully ({file_size:.2f} MB)")
-                return True
+    # Download model file
+    with st.spinner(f"Downloading {filename}... ⏳"):
+        try:
+            response = requests.get(url, stream=True)
+            response.raise_for_status()
 
-            except Exception as e:
-                st.error(f"❌ Failed to download {filename}: {str(e)}")
-                if os.path.exists(filename):
-                    os.remove(filename)
-                return False
-    return True  # File already exists
+            with open(local_path, "wb") as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    f.write(chunk)
+
+            # Verify file size
+            file_size = os.path.getsize(local_path) / (1024 * 1024)  # Convert to MB
+            if file_size < expected_size_mb * 0.8:
+                os.remove(local_path)
+                st.error(f"❌ Download failed: File size mismatch for {filename}.")
+                return
+
+            st.sidebar.success(f"✅ {filename} downloaded successfully!")
+
+        except Exception as e:
+            st.error(f"❌ Failed to download {filename}: {str(e)}")
+            if os.path.exists(local_path):
+                os.remove(local_path)
 
 # -----------------------------
 # 🎨 STREAMLIT UI SETUP
 # -----------------------------
 st.set_page_config(page_title="Brain Tumor Detection", page_icon="🧠", layout="wide")
+
+st.markdown(
+    """
+    <style>
+    body {
+        background-color: #f7f9fc;
+        font-family: "Arial", sans-serif;
+    }
+    .stApp {
+        background-color: #ffffff;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 2px 2px 10px rgba(0,0,0,0.1);
+    }
+    .stButton>button {
+        color: white;
+        background-color: #4CAF50;
+        border-radius: 10px;
+        border: none;
+        padding: 10px 15px;
+    }
+    .stTextInput>div>div>input {
+        border-radius: 10px;
+        border: 2px solid #4CAF50;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 st.title("🧠 Brain Tumor Detection")
 st.sidebar.header("⚡ Model Status")
@@ -60,39 +102,43 @@ st.sidebar.header("⚡ Model Status")
 # 📥 DOWNLOAD MODELS
 # -----------------------------
 st.sidebar.subheader("Downloading Models:")
+download_model(MRI_MODEL_FILENAME, 205)
+download_model(TUMOR_MODEL_FILENAME, 134)
 
-mri_downloaded = download_model(MRI_CLASSIFIER_URL, MRI_MODEL_PATH, 205)
-tumor_downloaded = download_model(TUMOR_CLASSIFIER_URL, TUMOR_MODEL_PATH, 134)
-
-if mri_downloaded and tumor_downloaded:
-    st.sidebar.success("✅ All models are ready!")
-else:
-    st.sidebar.error("⚠️ Model download failed. Check your internet connection.")
+st.sidebar.success("✅ All models are ready!")
 
 # -----------------------------
 # 🧠 LOAD MODELS
 # -----------------------------
 @st.cache_resource
 def load_torch_model(model_path):
-    """Load a PyTorch model."""
+    """Load a PyTorch model safely."""
     if not os.path.exists(model_path):
         st.error(f"❌ Model file {model_path} not found.")
         return None
-    model = torch.load(model_path, map_location=torch.device('cpu'))
-    model.eval()
-    return model
+    try:
+        model = torch.load(model_path, map_location=torch.device("cpu"))
+        model.eval()
+        return model
+    except Exception as e:
+        st.error(f"❌ Failed to load PyTorch model: {e}")
+        return None
 
 @st.cache_resource
 def load_tf_model(model_path):
-    """Load a TensorFlow model."""
+    """Load a TensorFlow model safely."""
     if not os.path.exists(model_path):
         st.error(f"❌ Model file {model_path} not found.")
         return None
-    return tf.keras.models.load_model(model_path)
+    try:
+        return tf.keras.models.load_model(model_path)
+    except Exception as e:
+        st.error(f"❌ Failed to load TensorFlow model: {e}")
+        return None
 
-# Load models if downloaded
-mri_checker = load_torch_model(MRI_MODEL_PATH) if mri_downloaded else None
-tumor_classifier = load_tf_model(TUMOR_MODEL_PATH) if tumor_downloaded else None
+# Load models
+mri_checker = load_torch_model(MRI_MODEL_PATH)
+tumor_classifier = load_tf_model(TUMOR_MODEL_PATH)
 
 # -----------------------------
 # 🖼️ IMAGE PREPROCESSING FUNCTION

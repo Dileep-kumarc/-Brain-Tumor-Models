@@ -58,16 +58,29 @@ def validate_and_load_file(filename, expected_size_mb):
 # -----------------------------
 MRI_CHECKER_MODEL_PATH = "best_mri_classifier.pth"
 TUMOR_CLASSIFIER_MODEL_PATH = "brain_tumor_classifier.h5"
-MRI_EXPECTED_SIZE_MB = 205  # Adjusted to prior context
-TUMOR_EXPECTED_SIZE_MB = 134  # Adjusted to prior context
+MRI_EXPECTED_SIZE_MB = 205  # From prior context
+TUMOR_EXPECTED_SIZE_MB = 134  # From prior context
 
 mri_model_ready = validate_and_load_file(MRI_CHECKER_MODEL_PATH, MRI_EXPECTED_SIZE_MB)
 tumor_model_ready = validate_and_load_file(TUMOR_CLASSIFIER_MODEL_PATH, TUMOR_EXPECTED_SIZE_MB)
 
+# Manual upload fallback
+st.sidebar.subheader("📤 Manual Model Upload (if GitHub fails)")
+mri_file = st.sidebar.file_uploader("Upload best_mri_classifier.pth", type="pth")
+tumor_file = st.sidebar.file_uploader("Upload brain_tumor_classifier.h5", type="h5")
+if mri_file:
+    with open(MRI_CHECKER_MODEL_PATH, "wb") as f:
+        f.write(mri_file.read())
+    mri_model_ready = True
+if tumor_file:
+    with open(TUMOR_CLASSIFIER_MODEL_PATH, "wb") as f:
+        f.write(tumor_file.read())
+    tumor_model_ready = True
+
 if mri_model_ready and tumor_model_ready:
     st.sidebar.success("✅ All models are ready!")
 else:
-    st.sidebar.error("❌ Model setup failed. Check GitHub or upload models manually.")
+    st.sidebar.error("❌ Model setup failed. Upload models manually or check GitHub.")
 
 # -----------------------------
 # 🧠 LOAD MODELS

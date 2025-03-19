@@ -15,36 +15,46 @@ GITHUB_BASE_URL = "https://raw.githubusercontent.com/Dileep-kumarc/-Brain-Tumor-
 
 def download_model_from_github(filename, expected_size_mb):
     """Download model file from GitHub with size validation."""
-    if not os.path.exists(filename):
-        url = GITHUB_BASE_URL + filename
-        st.info(f"Downloading {filename} from GitHub...")
-        try:
-            response = requests.get(url, stream=True, timeout=30)
-            response.raise_for_status()
-            with open(filename, "wb") as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    if chunk:
-                        f.write(chunk)
-            file_size = os.path.getsize(filename) / (1024 * 1024)  # Size in MB
-            if file_size < expected_size_mb * 0.8:
-                st.error(f"File size mismatch for {filename}. Expected ~{expected_size_mb}MB but got {file_size:.2f}MB.")
-                os.remove(filename)
-                raise ValueError("Invalid file size")
-            st.success(f"Successfully downloaded {filename} ({file_size:.2f} MB)")
-        except Exception as e:
-            st.error(f"Failed to download {filename}: {str(e)}")
-            if os.path.exists(filename):
-                os.remove(filename)
-            raise
-    else:
-        st.info(f"{filename} already exists locally.")
+    url = GITHUB_BASE_URL + filename
+    st.info(f"Downloading {filename} from GitHub...")
+    try:
+        response = requests.get(url, stream=True, timeout=30)
+        response.raise_for_status()
+        with open(filename, "wb") as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+        file_size = os.path.getsize(filename) / (1024 * 1024)  # Size in MB
+        if file_size < expected_size_mb * 0.8:
+            st.error(f"File size mismatch for {filename}. Expected ~{expected_size_mb}MB but got {file_size:.2f}MB.")
+            os.remove(filename)
+            raise ValueError("Invalid file size")
+        st.success(f"Successfully downloaded {filename} ({file_size:.2f} MB)")
+    except Exception as e:
+        st.error(f"Failed to download {filename}: {str(e)}")
+        if os.path.exists(filename):
+            os.remove(filename)
+        raise
 
-# Download models with expected sizes
+def validate_and_load_file(filename, expected_size_mb):
+    """Validate file existence and integrity, re-download if invalid."""
+    if os.path.exists(filename):
+        file_size = os.path.getsize(filename) / (1024 * 1024)
+        st.info(f"{filename} already exists locally ({file_size:.2f} MB).")
+        # Check if file size is reasonable
+        if file_size < expected_size_mb * 0.5:  # Allow some leeway
+            st.warning(f"{filename} size ({file_size:.2f} MB) is too small. Re-downloading...")
+            os.remove(filename)
+            download_model_from_github(filename, expected_size_mb)
+    else:
+        download_model_from_github(filename, expected_size_mb)
+
+# Validate and load models
 try:
-    download_model_from_github("best_mri_classifier.pth", 205)
-    download_model_from_github("brain_tumor_classifier.h5", 134)
+    validate_and_load_file("best_mri_classifier.pth", 205)
+    validate_and_load_file("brain_tumor_classifier.h5", 134)
 except Exception as e:
-    st.error("Model download failed. Cannot proceed.")
+    st.error("Model file validation/download failed. Cannot proceed.")
     st.stop()
 
 # -----------------------------
@@ -76,14 +86,10 @@ def load_models():
     # Load PyTorch model
     try:
         model = CustomCNN()
-        # Use weights_only=False to load older full-model files; safe if you trust the source
         loaded_data = torch.load("best_mri_classifier.pth", map_location=torch.device('cpu'), weights_only=False)
-        
-        # Check if loaded_data is a state dict or full model
         if isinstance(loaded_data, dict):
             model.load_state_dict(loaded_data)
         else:
-            # If it's a full model, assume it's the model itself
             model = loaded_data
         model.eval()
     except Exception as e:

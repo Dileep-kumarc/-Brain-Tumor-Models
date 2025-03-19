@@ -46,26 +46,20 @@ def download_model_from_github(filename, expected_size_mb):
 # -----------------------------
 st.set_page_config(page_title="Brain Tumor Detection", page_icon="🧠", layout="wide")
 
+# Custom CSS for better UI
 st.markdown(
     """
     <style>
-    /* ------------------ BODY STYLING ------------------ */
-    body {
-        background-color: #f4f7f6;
-        font-family: "Poppins", sans-serif;
-    }
-
     /* ------------------ APP MAIN CONTAINER ------------------ */
     .stApp {
-        background-color: #ffffff;
+        background-color: #f8f9fa;
         padding: 20px;
         border-radius: 12px;
-        box-shadow: 3px 3px 15px rgba(0,0,0,0.1);
     }
 
     /* ------------------ SIDEBAR STYLING ------------------ */
     [data-testid="stSidebar"] {
-        background: linear-gradient(135deg, #1f4037, #99f2c8);
+        background: linear-gradient(135deg, #1e3c72, #2a5298);
         padding: 20px;
         border-radius: 0 12px 12px 0;
     }
@@ -77,32 +71,25 @@ st.markdown(
     /* ------------------ BUTTON STYLING ------------------ */
     .stButton>button {
         color: white;
-        background: #4CAF50;
+        background: #007bff;
         border-radius: 12px;
-        padding: 12px;
+        padding: 10px;
         font-size: 16px;
         font-weight: bold;
         transition: 0.3s;
         border: none;
     }
     .stButton>button:hover {
-        background: #45a049;
+        background: #0056b3;
         transform: scale(1.05);
-    }
-
-    /* ------------------ TEXT INPUT STYLING ------------------ */
-    .stTextInput>div>div>input {
-        border-radius: 10px;
-        border: 2px solid #4CAF50;
-        padding: 8px;
     }
 
     /* ------------------ FILE UPLOAD BOX ------------------ */
     .stFileUploader {
-        border: 2px dashed #4CAF50;
+        border: 2px dashed #007bff;
         border-radius: 12px;
         padding: 10px;
-        background: rgba(76, 175, 80, 0.1);
+        background: rgba(0, 123, 255, 0.1);
         text-align: center;
     }
 
@@ -123,19 +110,10 @@ st.markdown(
         padding: 12px;
         border-left: 5px solid #a94442;
     }
-
     </style>
     """,
     unsafe_allow_html=True,
 )
-
-# -----------------------------
-# 🏠 MAIN UI
-# -----------------------------
-
-# ---------------
-# -----------------------------
-st.set_page_config(page_title="Brain Tumor Detection", page_icon="🧠", layout="wide")
 
 st.title("🧠 Brain Tumor Detection")
 st.sidebar.header("⚡ Model Status")

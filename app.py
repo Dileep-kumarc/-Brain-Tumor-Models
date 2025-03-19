@@ -42,25 +42,24 @@ def download_model_from_github(filename, expected_size_mb):
             return False
 
 def validate_and_load_file(filename, expected_size_mb):
-    """Validate file existence and integrity, attempt download if missing or invalid."""
+    """Validate file existence and integrity, download if needed."""
     if os.path.exists(filename):
         file_size = os.path.getsize(filename) / (1024 * 1024)
         st.info(f"{filename} exists locally ({file_size:.2f} MB).")
         if file_size < expected_size_mb * 0.5:
-            st.warning(f"{filename} size too small. Attempting re-download...")
+            st.warning(f"{filename} size too small. Re-downloading...")
             os.remove(filename)
             return download_model_from_github(filename, expected_size_mb)
         return True
-    else:
-        return download_model_from_github(filename, expected_size_mb)
+    return download_model_from_github(filename, expected_size_mb)
 
 # -----------------------------
 # 📥 DOWNLOAD MODELS
 # -----------------------------
 MRI_CHECKER_MODEL_PATH = "best_mri_classifier.pth"
 TUMOR_CLASSIFIER_MODEL_PATH = "brain_tumor_classifier.h5"
-MRI_EXPECTED_SIZE_MB = 205  # Based on prior context
-TUMOR_EXPECTED_SIZE_MB = 134  # Adjusted from prior context
+MRI_EXPECTED_SIZE_MB = 205  # Adjusted to prior context
+TUMOR_EXPECTED_SIZE_MB = 134  # Adjusted to prior context
 
 mri_model_ready = validate_and_load_file(MRI_CHECKER_MODEL_PATH, MRI_EXPECTED_SIZE_MB)
 tumor_model_ready = validate_and_load_file(TUMOR_CLASSIFIER_MODEL_PATH, TUMOR_EXPECTED_SIZE_MB)
@@ -178,7 +177,7 @@ if uploaded_file:
             st.subheader("🔬 Classifying Tumor Type...")
             if tumor_classifier:
                 input_tensor_tf = preprocess_image_tf(image)
-                prediction = tumor_classifier.predict(input_tensor_tf)
+                prediction = tumor_classifier.predict(input_tensor_tf, verbose=0)
                 predicted_class = np.argmax(prediction, axis=1)[0]
                 class_labels = ["No Tumor", "Glioma", "Meningioma", "Pituitary"]
                 prediction_result = class_labels[predicted_class]

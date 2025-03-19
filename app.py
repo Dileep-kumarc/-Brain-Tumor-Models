@@ -6,8 +6,7 @@ import torch.nn as nn
 import tensorflow as tf
 import numpy as np
 from PIL import Image
-import torchvision.models as models
-from torchvision import transforms
+import torchvision.transforms as transforms
 
 # -----------------------------
 # 📥 GITHUB BASE URL
@@ -16,8 +15,8 @@ GITHUB_BASE_URL = "https://github.com/Dileep-kumarc/-Brain-Tumor-Models/raw/main
 
 # Model filenames and expected sizes (in MB)
 MODEL_FILES = {
-    "best_mri_classifier.pth": 196,  # From your output
-    "brain_tumor_classifier.h5": 128  # From your output
+    "best_mri_classifier.pth": 196,  # Expected PyTorch model size
+    "brain_tumor_classifier.h5": 128  # Expected TensorFlow model size
 }
 
 # -----------------------------
@@ -91,12 +90,12 @@ if None in MODEL_PATHS.values() and not (mri_file and tumor_file):
 class CustomCNN(nn.Module):
     def __init__(self):
         super(CustomCNN, self).__init__()
-        self.conv1 = nn.Conv2d(3, 32, kernel_size=3, padding=1)  # Matches [32, 3, 3, 3] from error
+        self.conv1 = nn.Conv2d(3, 32, kernel_size=3, padding=1)
         self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
         self.conv3 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.fc1 = nn.Linear(128 * 28 * 28, 512)  # Assumes 224x224 input, 3 pooling layers
-        self.fc2 = nn.Linear(512, 2)  # Binary: MRI or not
+        self.fc1 = nn.Linear(128 * 28 * 28, 512)  # Assumes 224x224 input
+        self.fc2 = nn.Linear(512, 2)  # Binary classification
 
     def forward(self, x):
         x = self.pool(torch.relu(self.conv1(x)))
@@ -107,28 +106,21 @@ class CustomCNN(nn.Module):
         x = self.fc2(x)
         return x
 
-
 def load_torch_model(model_path):
+    """Load a PyTorch model with the correct architecture."""
     if not model_path or not os.path.exists(model_path):
         st.error(f"❌ Model file {model_path} not found.")
         return None
 
     try:
-        # 🔹 Use ResNet18 (or the model that was actually trained)
-        model = models.resnet18(pretrained=False)  
-        num_ftrs = model.fc.in_features
-        model.fc = torch.nn.Linear(num_ftrs, 2)  # Adjust output classes if needed
-
-        # 🔹 Load the state_dict correctly
+        model = CustomCNN()  # Correct architecture
         state_dict = torch.load(model_path, map_location=torch.device('cpu'))
         model.load_state_dict(state_dict)
-
         model.eval()
         return model
     except Exception as e:
         st.error(f"❌ Error loading PyTorch model: {str(e)}")
         return None
-
 
 @st.cache_resource
 def load_tf_model(model_path):
@@ -197,7 +189,6 @@ if uploaded_file:
         predicted_class = np.argmax(prediction, axis=1)[0]
         confidence = prediction[0][predicted_class]
 
-        # Mapping output to class names
         class_labels = ["No Tumor", "Glioma", "Meningioma", "Pituitary"]
         prediction_result = class_labels[predicted_class]
 

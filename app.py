@@ -18,22 +18,18 @@ def download_model_from_github(filename, expected_size_mb):
     if not os.path.exists(filename):
         url = GITHUB_BASE_URL + filename
         st.info(f"Downloading {filename} from GitHub...")
-
         try:
             response = requests.get(url, stream=True, timeout=30)
             response.raise_for_status()
-
             with open(filename, "wb") as f:
                 for chunk in response.iter_content(chunk_size=8192):
                     if chunk:
                         f.write(chunk)
-
             file_size = os.path.getsize(filename) / (1024 * 1024)  # Size in MB
             if file_size < expected_size_mb * 0.8:
                 st.error(f"File size mismatch for {filename}. Expected ~{expected_size_mb}MB but got {file_size:.2f}MB.")
                 os.remove(filename)
                 raise ValueError("Invalid file size")
-
             st.success(f"Successfully downloaded {filename} ({file_size:.2f} MB)")
         except Exception as e:
             st.error(f"Failed to download {filename}: {str(e)}")
@@ -80,8 +76,15 @@ def load_models():
     # Load PyTorch model
     try:
         model = CustomCNN()
-        state_dict = torch.load("best_mri_classifier.pth", map_location=torch.device('cpu'))
-        model.load_state_dict(state_dict)
+        # Use weights_only=False to load older full-model files; safe if you trust the source
+        loaded_data = torch.load("best_mri_classifier.pth", map_location=torch.device('cpu'), weights_only=False)
+        
+        # Check if loaded_data is a state dict or full model
+        if isinstance(loaded_data, dict):
+            model.load_state_dict(loaded_data)
+        else:
+            # If it's a full model, assume it's the model itself
+            model = loaded_data
         model.eval()
     except Exception as e:
         st.error(f"Failed to load PyTorch model: {str(e)}")
@@ -145,7 +148,6 @@ def classify_tumor(image, model):
 
 # -----------------------------
 # 🎨 STREAMLIT UI WITH CSS
-
 # -----------------------------
 st.set_page_config(page_title="Brain Tumor Detection", page_icon="🧠", layout="wide")
 

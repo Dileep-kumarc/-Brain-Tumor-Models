@@ -1,48 +1,41 @@
 import os
 import requests
+import streamlit as st
 import torch
 import torchvision.transforms as transforms
 from PIL import Image
 import tensorflow as tf
 import numpy as np
-import streamlit as st
 
 # -----------------------------
-# 📥 GITHUB MODEL URLS
+# 📥 GITHUB BASE URL
 # -----------------------------
 GITHUB_BASE_URL = "https://github.com/Dileep-kumarc/-Brain-Tumor-Models/raw/main/"
 
-MRI_MODEL_FILENAME = "best_mri_classifier.pth"
-TUMOR_MODEL_FILENAME = "brain_tumor_classifier.h5"
-
-MRI_MODEL_PATH = os.path.join(os.getcwd(), MRI_MODEL_FILENAME)
-TUMOR_MODEL_PATH = os.path.join(os.getcwd(), TUMOR_MODEL_FILENAME)
-
-EXPECTED_FILE_SIZES = {
-    MRI_MODEL_FILENAME: 205 * 1024 * 1024,  # 205 MB
-    TUMOR_MODEL_FILENAME: 134 * 1024 * 1024  # 134 MB
+# Model filenames and expected sizes (in MB)
+MODEL_FILES = {
+    "best_mri_classifier.pth": 196,  # Updated size
+    "brain_tumor_classifier.h5": 128  # Updated size
 }
 
 # -----------------------------
 # 📥 DOWNLOAD MODEL FUNCTION
 # -----------------------------
-def download_model(filename):
-    """Download model from GitHub if not present or corrupted."""
-    url = GITHUB_BASE_URL + filename
+def download_model(filename, expected_size_mb):
+    """Download a model file from GitHub and verify its integrity."""
     local_path = os.path.join(os.getcwd(), filename)
 
+    # Check if the file already exists and has the correct size
     if os.path.exists(local_path):
-        file_size = os.path.getsize(local_path)
-        expected_size = EXPECTED_FILE_SIZES.get(filename, 0)
-
-        if abs(file_size - expected_size) <= 5 * 1024 * 1024:  # Allow 5MB variance
-            st.sidebar.success(f"✅ {filename} is already downloaded.")
+        file_size = os.path.getsize(local_path) / (1024 * 1024)  # Convert to MB
+        if abs(file_size - expected_size_mb) < 5:  # Allow minor variation
+            st.sidebar.success(f"✅ {filename} is ready ({file_size:.2f} MB)")
             return local_path
         else:
-            os.remove(local_path)
             st.warning(f"⚠️ Corrupt file detected for {filename}. Re-downloading...")
 
-    # Download file
+    # Download the file
+    url = GITHUB_BASE_URL + filename
     with st.spinner(f"Downloading {filename}... ⏳"):
         try:
             response = requests.get(url, stream=True)
@@ -52,20 +45,18 @@ def download_model(filename):
                 for chunk in response.iter_content(chunk_size=8192):
                     f.write(chunk)
 
-            # Verify file size after download
-            file_size = os.path.getsize(local_path)
-            expected_size = EXPECTED_FILE_SIZES.get(filename, 0)
-
-            if abs(file_size - expected_size) > 5 * 1024 * 1024:  # Allow 5MB variance
+            # Verify file size
+            file_size = os.path.getsize(local_path) / (1024 * 1024)
+            if abs(file_size - expected_size_mb) > 5:
                 os.remove(local_path)
-                st.error(f"❌ Download failed: File size mismatch for {filename}.")
+                st.error(f"❌ File size mismatch for {filename}. Expected ~{expected_size_mb}MB but got {file_size:.2f}MB.")
                 return None
 
-            st.sidebar.success(f"✅ {filename} downloaded successfully!")
+            st.sidebar.success(f"✅ {filename} downloaded successfully ({file_size:.2f} MB)")
             return local_path
 
         except Exception as e:
-            st.error(f"❌ Failed to download {filename}: {str(e)}")
+            st.error(f"❌ Download failed: {str(e)}")
             if os.path.exists(local_path):
                 os.remove(local_path)
             return None
@@ -82,47 +73,46 @@ st.sidebar.header("⚡ Model Status")
 # 📥 DOWNLOAD MODELS
 # -----------------------------
 st.sidebar.subheader("Downloading Models:")
-MRI_MODEL_PATH = download_model(MRI_MODEL_FILENAME)
-TUMOR_MODEL_PATH = download_model(TUMOR_MODEL_FILENAME)
 
-if not MRI_MODEL_PATH or not TUMOR_MODEL_PATH:
-    st.error("❌ Model files missing. Please check your internet connection or model URLs.")
-    st.stop()
+MODEL_PATHS = {}
+for filename, size in MODEL_FILES.items():
+    MODEL_PATHS[filename] = download_model(filename, size)
 
-st.sidebar.success("✅ All models are ready!")
+if None in MODEL_PATHS.values():
+    st.sidebar.error("❌ Model files missing. Please check your internet connection or model URLs.")
+    st.stop()  # Stop execution if models are missing
 
 # -----------------------------
 # 🧠 LOAD MODELS
 # -----------------------------
 @st.cache_resource
 def load_torch_model(model_path):
-    """Load a PyTorch model safely."""
-    if not os.path.exists(model_path):
+    if not model_path or not os.path.exists(model_path):
         st.error(f"❌ Model file {model_path} not found.")
         return None
     try:
-        model = torch.load(model_path, map_location=torch.device("cpu"))
+        model = torch.load(model_path, map_location=torch.device('cpu'))
         model.eval()
         return model
     except Exception as e:
-        st.error(f"❌ Failed to load PyTorch model: {e}")
+        st.error(f"❌ Error loading PyTorch model: {str(e)}")
         return None
 
 @st.cache_resource
 def load_tf_model(model_path):
-    """Load a TensorFlow model safely."""
-    if not os.path.exists(model_path):
+    """Load a TensorFlow model."""
+    if not model_path or not os.path.exists(model_path):
         st.error(f"❌ Model file {model_path} not found.")
         return None
     try:
         return tf.keras.models.load_model(model_path)
     except Exception as e:
-        st.error(f"❌ Failed to load TensorFlow model: {e}")
+        st.error(f"❌ Error loading TensorFlow model: {str(e)}")
         return None
 
 # Load models
-mri_checker = load_torch_model(MRI_MODEL_PATH)
-tumor_classifier = load_tf_model(TUMOR_MODEL_PATH)
+mri_checker = load_torch_model(MODEL_PATHS["best_mri_classifier.pth"])
+tumor_classifier = load_tf_model(MODEL_PATHS["brain_tumor_classifier.h5"])
 
 # -----------------------------
 # 🖼️ IMAGE PREPROCESSING FUNCTION
@@ -165,6 +155,7 @@ if uploaded_file:
 
         if is_mri == 0:  # Assuming 0 = Not MRI, 1 = MRI
             st.error("🚫 This is NOT an MRI image. Please upload a valid brain MRI scan.")
+            st.stop()  # Stop further execution
         else:
             st.success("✅ MRI scan detected!")
 

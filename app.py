@@ -9,13 +9,13 @@ import numpy as np
 # -----------------------------
 @st.cache_resource
 def load_torch_model(model_path):
-    """Load a PyTorch model."""
     if not os.path.exists(model_path):
         st.error(f"❌ Model file {model_path} not found.")
         return None
     model = torch.load(model_path, map_location=torch.device('cpu'))
     model.eval()
     return model
+
 
 @st.cache_resource
 def load_tf_model(model_path):

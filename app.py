@@ -10,7 +10,7 @@ import streamlit as st
 # -----------------------------
 # 📥 GITHUB MODEL URLS
 # -----------------------------
-GITHUB_BASE_URL = "https://raw.githubusercontent.com/Dileep-kumarc/-Brain-Tumor-Models/main/"
+GITHUB_BASE_URL = "https://github.com/Dileep-kumarc/-Brain-Tumor-Models/raw/main/"
 
 MRI_MODEL_FILENAME = "best_mri_classifier.pth"
 TUMOR_MODEL_FILENAME = "brain_tumor_classifier.h5"
@@ -18,26 +18,31 @@ TUMOR_MODEL_FILENAME = "brain_tumor_classifier.h5"
 MRI_MODEL_PATH = os.path.join(os.getcwd(), MRI_MODEL_FILENAME)
 TUMOR_MODEL_PATH = os.path.join(os.getcwd(), TUMOR_MODEL_FILENAME)
 
+EXPECTED_FILE_SIZES = {
+    MRI_MODEL_FILENAME: 205 * 1024 * 1024,  # 205 MB
+    TUMOR_MODEL_FILENAME: 134 * 1024 * 1024  # 134 MB
+}
+
 # -----------------------------
 # 📥 DOWNLOAD MODEL FUNCTION
 # -----------------------------
-def download_model(filename, expected_size_mb):
-    """Download a model file from GitHub and verify integrity."""
+def download_model(filename):
+    """Download model from GitHub if not present or corrupted."""
     url = GITHUB_BASE_URL + filename
     local_path = os.path.join(os.getcwd(), filename)
 
     if os.path.exists(local_path):
-        # Verify file integrity
-        file_size = os.path.getsize(local_path) / (1024 * 1024)  # Convert to MB
-        if file_size >= expected_size_mb * 0.8:
+        file_size = os.path.getsize(local_path)
+        expected_size = EXPECTED_FILE_SIZES.get(filename, 0)
+
+        if abs(file_size - expected_size) <= 5 * 1024 * 1024:  # Allow 5MB variance
             st.sidebar.success(f"✅ {filename} is already downloaded.")
-            return
+            return local_path
+        else:
+            os.remove(local_path)
+            st.warning(f"⚠️ Corrupt file detected for {filename}. Re-downloading...")
 
-        # If file is corrupt, remove and re-download
-        os.remove(local_path)
-        st.warning(f"⚠️ Corrupt file detected for {filename}. Re-downloading...")
-
-    # Download model file
+    # Download file
     with st.spinner(f"Downloading {filename}... ⏳"):
         try:
             response = requests.get(url, stream=True)
@@ -47,53 +52,28 @@ def download_model(filename, expected_size_mb):
                 for chunk in response.iter_content(chunk_size=8192):
                     f.write(chunk)
 
-            # Verify file size
-            file_size = os.path.getsize(local_path) / (1024 * 1024)  # Convert to MB
-            if file_size < expected_size_mb * 0.8:
+            # Verify file size after download
+            file_size = os.path.getsize(local_path)
+            expected_size = EXPECTED_FILE_SIZES.get(filename, 0)
+
+            if abs(file_size - expected_size) > 5 * 1024 * 1024:  # Allow 5MB variance
                 os.remove(local_path)
                 st.error(f"❌ Download failed: File size mismatch for {filename}.")
-                return
+                return None
 
             st.sidebar.success(f"✅ {filename} downloaded successfully!")
+            return local_path
 
         except Exception as e:
             st.error(f"❌ Failed to download {filename}: {str(e)}")
             if os.path.exists(local_path):
                 os.remove(local_path)
+            return None
 
 # -----------------------------
 # 🎨 STREAMLIT UI SETUP
 # -----------------------------
 st.set_page_config(page_title="Brain Tumor Detection", page_icon="🧠", layout="wide")
-
-st.markdown(
-    """
-    <style>
-    body {
-        background-color: #f7f9fc;
-        font-family: "Arial", sans-serif;
-    }
-    .stApp {
-        background-color: #ffffff;
-        padding: 20px;
-        border-radius: 10px;
-        box-shadow: 2px 2px 10px rgba(0,0,0,0.1);
-    }
-    .stButton>button {
-        color: white;
-        background-color: #4CAF50;
-        border-radius: 10px;
-        border: none;
-        padding: 10px 15px;
-    }
-    .stTextInput>div>div>input {
-        border-radius: 10px;
-        border: 2px solid #4CAF50;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
 
 st.title("🧠 Brain Tumor Detection")
 st.sidebar.header("⚡ Model Status")
@@ -102,8 +82,12 @@ st.sidebar.header("⚡ Model Status")
 # 📥 DOWNLOAD MODELS
 # -----------------------------
 st.sidebar.subheader("Downloading Models:")
-download_model(MRI_MODEL_FILENAME, 205)
-download_model(TUMOR_MODEL_FILENAME, 134)
+MRI_MODEL_PATH = download_model(MRI_MODEL_FILENAME)
+TUMOR_MODEL_PATH = download_model(TUMOR_MODEL_FILENAME)
+
+if not MRI_MODEL_PATH or not TUMOR_MODEL_PATH:
+    st.error("❌ Model files missing. Please check your internet connection or model URLs.")
+    st.stop()
 
 st.sidebar.success("✅ All models are ready!")
 

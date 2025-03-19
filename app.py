@@ -91,12 +91,20 @@ def load_torch_model(model_path):
         st.error(f"❌ Model file {model_path} not found.")
         return None
     try:
-        model = torch.load(model_path, map_location=torch.device('cpu'))
+        # Define the model architecture (Ensure it's the same as the one used for training)
+        from torchvision import models
+        model = models.resnet18(pretrained=False)  # Change this to your actual model architecture
+        model.fc = torch.nn.Linear(model.fc.in_features, 2)  # Adjust for your classes
+
+        # Load the state dict
+        state_dict = torch.load(model_path, map_location=torch.device('cpu'))
+        model.load_state_dict(state_dict)
         model.eval()
         return model
     except Exception as e:
         st.error(f"❌ Error loading PyTorch model: {str(e)}")
         return None
+
 
 @st.cache_resource
 def load_tf_model(model_path):

@@ -1,21 +1,86 @@
+import os
+import requests
+import streamlit as st
 import torch
 import torchvision.transforms as transforms
-from PIL import Image
 import tensorflow as tf
 import numpy as np
+from PIL import Image
+
+# -----------------------------
+# 📥 DIRECT GITHUB LINKS FOR MODELS
+# -----------------------------
+MRI_CLASSIFIER_URL = "https://github.com/Dileep-kumarc/-Brain-Tumor-Models/raw/main/best_mri_classifier.pth"
+TUMOR_CLASSIFIER_URL = "https://github.com/Dileep-kumarc/-Brain-Tumor-Models/raw/main/brain_tumor_classifier.h5"
+
+MRI_MODEL_PATH = "best_mri_classifier.pth"
+TUMOR_MODEL_PATH = "brain_tumor_classifier.h5"
+
+# -----------------------------
+# 📥 DOWNLOAD FUNCTION
+# -----------------------------
+def download_model(model_url, filename, expected_size_mb):
+    """Download a model file from GitHub if not present."""
+    if not os.path.exists(filename):
+        with st.spinner(f"Downloading {filename}... ⏳"):
+            try:
+                response = requests.get(model_url, stream=True)
+                response.raise_for_status()
+
+                with open(filename, "wb") as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        f.write(chunk)
+
+                # Verify file size
+                file_size = os.path.getsize(filename) / (1024 * 1024)  # Convert to MB
+                if file_size < expected_size_mb * 0.8:
+                    os.remove(filename)
+                    st.error(f"❌ File size mismatch for {filename}. Expected ~{expected_size_mb}MB but got {file_size:.2f}MB.")
+                    return False
+
+                st.success(f"✅ {filename} downloaded successfully ({file_size:.2f} MB)")
+                return True
+
+            except Exception as e:
+                st.error(f"❌ Failed to download {filename}: {str(e)}")
+                if os.path.exists(filename):
+                    os.remove(filename)
+                return False
+    return True  # File already exists
+
+# -----------------------------
+# 🎨 STREAMLIT UI SETUP
+# -----------------------------
+st.set_page_config(page_title="Brain Tumor Detection", page_icon="🧠", layout="wide")
+
+st.title("🧠 Brain Tumor Detection")
+st.sidebar.header("⚡ Model Status")
+
+# -----------------------------
+# 📥 DOWNLOAD MODELS
+# -----------------------------
+st.sidebar.subheader("Downloading Models:")
+
+mri_downloaded = download_model(MRI_CLASSIFIER_URL, MRI_MODEL_PATH, 205)
+tumor_downloaded = download_model(TUMOR_CLASSIFIER_URL, TUMOR_MODEL_PATH, 134)
+
+if mri_downloaded and tumor_downloaded:
+    st.sidebar.success("✅ All models are ready!")
+else:
+    st.sidebar.error("⚠️ Model download failed. Check your internet connection.")
 
 # -----------------------------
 # 🧠 LOAD MODELS
 # -----------------------------
 @st.cache_resource
 def load_torch_model(model_path):
+    """Load a PyTorch model."""
     if not os.path.exists(model_path):
         st.error(f"❌ Model file {model_path} not found.")
         return None
     model = torch.load(model_path, map_location=torch.device('cpu'))
     model.eval()
     return model
-
 
 @st.cache_resource
 def load_tf_model(model_path):
@@ -25,9 +90,9 @@ def load_tf_model(model_path):
         return None
     return tf.keras.models.load_model(model_path)
 
-# Load both models
-mri_checker = load_torch_model("best_mri_classifier.pth")
-tumor_classifier = load_tf_model("brain_tumor_classifier.h5")
+# Load models if downloaded
+mri_checker = load_torch_model(MRI_MODEL_PATH) if mri_downloaded else None
+tumor_classifier = load_tf_model(TUMOR_MODEL_PATH) if tumor_downloaded else None
 
 # -----------------------------
 # 🖼️ IMAGE PREPROCESSING FUNCTION

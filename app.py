@@ -6,6 +6,7 @@ import torch.nn as nn
 import tensorflow as tf
 import numpy as np
 from PIL import Image
+import torchvision.models as models
 from torchvision import transforms
 
 # -----------------------------
@@ -106,24 +107,28 @@ class CustomCNN(nn.Module):
         x = self.fc2(x)
         return x
 
-@st.cache_resource
+
 def load_torch_model(model_path):
-    """Load PyTorch model, handling state dict or full model."""
     if not model_path or not os.path.exists(model_path):
         st.error(f"❌ Model file {model_path} not found.")
         return None
+
     try:
-        loaded_data = torch.load(model_path, map_location=torch.device('cpu'), weights_only=False)
-        model = CustomCNN()
-        if isinstance(loaded_data, dict):  # State dict case
-            model.load_state_dict(loaded_data)
-        else:  # Full model case
-            model = loaded_data
+        # 🔹 Use ResNet18 (or the model that was actually trained)
+        model = models.resnet18(pretrained=False)  
+        num_ftrs = model.fc.in_features
+        model.fc = torch.nn.Linear(num_ftrs, 2)  # Adjust output classes if needed
+
+        # 🔹 Load the state_dict correctly
+        state_dict = torch.load(model_path, map_location=torch.device('cpu'))
+        model.load_state_dict(state_dict)
+
         model.eval()
         return model
     except Exception as e:
         st.error(f"❌ Error loading PyTorch model: {str(e)}")
         return None
+
 
 @st.cache_resource
 def load_tf_model(model_path):
